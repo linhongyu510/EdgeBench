@@ -854,6 +854,7 @@ def create_app(config: SForgeConfig | None = None) -> FastAPI:
             "best_round": best["best_round"],
             "agent_submissions": sum(1 for e in agent_entries if e.get("type") == "submission"),
             "auto_submissions": 0,
+            "trajectory_metrics": compute_trajectory_metrics(agent_entries, direction),
             "entries": agent_entries,
         }
 

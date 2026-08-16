@@ -28,8 +28,9 @@ def _finite_float(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _stable_number(value: float) -> float:
-    return round(value, 12)
+def _stable_difference(left: float, right: float) -> float | None:
+    difference = left - right
+    return round(difference, 12) if math.isfinite(difference) else None
 
 
 def compute_trajectory_metrics(
@@ -57,6 +58,12 @@ def compute_trajectory_metrics(
         if value is None:
             continue
         points.append((value, _finite_float(entry.get("submitted_at"))))
+
+    # Judge workers may finish out of order. Reports carry the evaluation start
+    # time, so use it when every point has one; otherwise retain insertion order
+    # rather than inventing a position for an undated submission.
+    if points and all(timestamp is not None for _, timestamp in points):
+        points.sort(key=lambda point: point[1] if point[1] is not None else 0.0)
 
     if not points:
         return {
@@ -99,12 +106,15 @@ def compute_trajectory_metrics(
         if index is None or start_time is None:
             return None
         timestamp = points[index][1]
-        return max(timestamp - start_time, 0.0) if timestamp is not None else None
+        if timestamp is None:
+            return None
+        difference = timestamp - start_time
+        return max(difference, 0.0) if math.isfinite(difference) else None
 
     total_improvement = (
-        initial_value - best_value
+        _stable_difference(initial_value, best_value)
         if direction == "minimize"
-        else best_value - initial_value
+        else _stable_difference(best_value, initial_value)
     )
     return {
         "value_field": value_field,
@@ -113,7 +123,7 @@ def compute_trajectory_metrics(
         "initial_value": initial_value,
         "final_value": points[-1][0],
         "best_value": best_value,
-        "total_improvement": _stable_number(total_improvement),
+        "total_improvement": total_improvement,
         "improving_submissions": improving_submissions,
         "non_improving_submissions": len(points) - improving_submissions - 1,
         "first_improvement_seconds": elapsed(first_improvement_index),
